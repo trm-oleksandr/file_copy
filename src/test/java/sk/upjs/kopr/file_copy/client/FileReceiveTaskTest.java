@@ -8,10 +8,12 @@ import java.io.IOException;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.file.Files;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
+import java.util.function.LongConsumer;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -27,6 +29,7 @@ class FileReceiveTaskTest {
 	private int serverPort = Server.SERVER_PORT;
 	private FileInfo fileInfo;
 	private File file;
+	private File stateFile = new File(destDir, "test.state");
 	
 	public FileReceiveTaskTest() throws UnknownHostException {
 		fileInfo = FileInfoReceiver.getLocalhostServerFileInfo();
@@ -43,11 +46,15 @@ class FileReceiveTaskTest {
 		if (file.exists()) {
 			file.delete();
 		}
+		if (stateFile.exists()) {
+			stateFile.delete();
+		}
 	}
 
 	@AfterEach
 	void tearDown() throws Exception {
 		// file.delete();
+		stateFile.delete();
 	}
 
 	@Test
@@ -55,7 +62,14 @@ class FileReceiveTaskTest {
 		ExecutorService executorService = Executors.newSingleThreadExecutor();
 		try {
 			
-			FileReceiveTask task = new FileReceiveTask(file, fileInfo.size, 0, fileInfo.size, inetAddress, serverPort);
+			CopyState copyState = CopyState.create(stateFile, fileInfo, 1);
+			CountDownLatch latch = new CountDownLatch(1);
+			LongConsumer progressListener = new LongConsumer() {
+				@Override
+				public void accept(long received) {
+				}
+			};
+			FileReceiveTask task = new FileReceiveTask(file, copyState, 0, inetAddress, serverPort, latch, progressListener);
 			Future<Void> future = executorService.submit(task);
 			try {
 				future.get();
@@ -63,6 +77,9 @@ class FileReceiveTaskTest {
 				fail(e);
 			} catch (ExecutionException e) {
 				fail(e);
+			} finally {
+				MyFileWriter.getInstance(file, fileInfo.size).close();
+				copyState.close();
 			}
 		    long mismatch = Files.mismatch(file.toPath(), Server.FILE_TO_SHARE.toPath());
 		    assertEquals(-1, mismatch); // checking that files have the same content			

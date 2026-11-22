@@ -9,9 +9,11 @@ import java.util.Map;
 public class MyFileWriter {
 	private static Map<File, MyFileWriter> instances = new HashMap<>();
 	
+	private File file;
 	private RandomAccessFile raf;
 	
 	private MyFileWriter(File file, long fileSize) throws IOException {
+		this.file = file;
 		raf = new RandomAccessFile(file,"rw");
 		raf.setLength(fileSize);
 	}
@@ -31,6 +33,9 @@ public class MyFileWriter {
 	}
 	
 	public void close() {
+		synchronized (MyFileWriter.class) {
+			instances.remove(file);
+		}
 		try {
 			raf.close();
 		} catch (IOException e) {

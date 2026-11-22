@@ -1,11 +1,13 @@
 package sk.upjs.kopr.file_copy.server;
 
+import java.io.EOFException;
 import java.io.File;
 import java.io.FileNotFoundException;
 import java.io.ObjectInputStream;
 import java.io.ObjectOutputStream;
 import java.io.RandomAccessFile;
 import java.net.Socket;
+import java.net.SocketException;
 
 import sk.upjs.kopr.file_copy.FileInfo;
 import sk.upjs.kopr.file_copy.FileRequest;
@@ -58,10 +60,12 @@ public class FileSendTask implements Runnable {
 				oos.flush();
 				
 			} finally {
-				if (oos != null) oos.close();
-				if (ois != null) ois.close();
-				if (socket != null && socket.isConnected()) socket.close();
+				// closing the socket closes also its streams oos and ois
+				socket.close();
 			}
+		} catch (SocketException | EOFException e) {
+			// client closed the connection (copying interrupted by user)
+			System.out.println(socket.getInetAddress() + ":" + socket.getPort() + " : connection closed by client");
 		} catch (Exception e) {
 			e.printStackTrace();
 		}
